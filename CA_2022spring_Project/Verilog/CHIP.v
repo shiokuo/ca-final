@@ -33,6 +33,13 @@ module CHIP(clk,
     //---------------------------------------//
 
     // Todo: other wire/reg
+    wire [6:0] opcode;
+    wire [2:0] func3;
+    wire [6:0] func7;
+    reg Branch, MemRead, MemtoReg, MemWrite, ALUSrc, AUIPC;
+    reg[2:0] Jump;
+    reg[3:0] ALUOp;
+    reg[31:0] imm;
 
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -49,6 +56,183 @@ module CHIP(clk,
     //---------------------------------------//
 
     // Todo: any combinational/sequential circuit
+    //register file input
+    always @(*) begin
+        rs1 = mem_rdata_I[19:15];
+        rs2 = mem_rdata_I[24:20];
+        rd = mem_rdata_I[11:7];
+    end
+    //------------------ID-------------------
+    assign opcode = mem_rdata_I[6:0];
+    assign func7  = mem_rdata_I[31:25];
+    assign func3  = mem_rdata_I[14:12];
+    always @(*) begin
+        case (opcode)
+            7'b0010111:begin //auipc
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 1;
+                AUIPC      = 1;
+                Jump       = 2'd0;
+                ALUOp      = 4'b0000;
+                regWrite   = 1;
+                imm        = {mem_rdata_I[31:12], 12'b0};
+            end
+            7'b1101111:begin //jal
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 0;
+                AUIPC      = 0;
+                Jump       = 2'd1;
+                ALUOp      = 4'b0000;
+                regWrite   = 1;
+                imm        = {{11{mem_rdata_I[31]}}, mem_rdata_I[31], mem_rdata_I[19:12], mem_rdata_I[20], mem_rdata_I[30:21], 1'b0};
+            end
+            7'b1100111:begin //jalr
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 1;
+                AUIPC      = 0;
+                Jump       = 2'd2;
+                ALUOp      = 4'b0000;
+                regWrite   = 1;
+                imm        = {{20{mem_rdata_I[31]}}, mem_rdata_I[31:20]};
+            end
+            7'b1100011:begin //beq
+                Branch     = 1;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 0;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                ALUOp      = 4'b1000;
+                regWrite   = 0;
+                imm        = {{19{mem_rdata_I[31]}}, mem_rdata_I[31], mem_rdata_I[7], mem_rdata_I[30:25],mem_rdata_I[11:8], 1'b0};
+            end
+            7'b1100011:begin //bge
+                Branch     = 1;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 0;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                ALUOp      = 4'b1000;
+                regWrite   = 0;
+                imm        = {{19{mem_rdata_I[31]}}, mem_rdata_I[31], mem_rdata_I[7], mem_rdata_I[30:25],mem_rdata_I[11:8], 1'b0};
+            end
+            7'b0000011:begin //lw
+                Branch     = 0;
+                MemRead    = 1;
+                MemtoReg   = 1;
+                MemWrite   = 0;
+                ALUSrc     = 1;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                ALUOp      = 4'b0000;
+                regWrite   = 1;
+                imm        = {{20{mem_rdata_I[31]}}, mem_rdata_I[31:20]};
+            end
+            7'b0100011:begin //sw
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 1;
+                ALUSrc     = 1;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                ALUOp      = 4'b0000;
+                regWrite   = 0;
+                imm        = {{20{mem_rdata_I[31]}}, mem_rdata_I[31:25], mem_rdata_I[11:7]};
+            end
+            7'b0010011:begin //slti, addi, slli, srli
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 1;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                regWrite   = 1;
+                imm        = {{20{mem_rdata_I[31]}}, mem_rdata_I[31:20]};
+                case (func3)
+                    3'b000:begin //addi
+                        ALUOp = 4'b0000;
+                    end
+                    3'b010:begin //slti
+                        ALUOp = 4'b0010;
+                    end
+                    3'b001:begin //slli
+                        ALUOp = 4'b0001;
+                    end
+                    3'b101:begin //srli
+                        ALUOp = 4'b0101;
+                    end
+                    default : ALUOp = 4'b0000;
+                endcase
+            end
+            7'b0110011:begin //add,sub,xor,mul
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 0;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                imm        = 32'b0;
+                case(func7)
+                    7'b0000000:begin
+                        case(func3)
+                            3'b000:begin //add
+                                ALUOp    = 4'b0000;
+                                regWrite = 1;
+                            end
+                            3'b100:begin //xor //TODOOOOOOOOOOOOOO
+                                ALUOp    = ;
+                                regWrite = 1;
+                            end
+                            default:begin 
+                                ALUOp = 4'b0000;
+                                regWrite = 0;
+                            end
+                        endcase
+                    end
+                    7'b0100000:begin //sub
+                        ALUOp    = 4'b1000;
+                        regWrite = 1;
+                    end
+                    7'b0000001:begin //mul
+                        ALUOp    = 4'b1111;
+                        regWrite = (hold == 2'd2 && ready) ? (1):(0);;
+                    end
+                    default:begin 
+                        ALUOp = 4'b0000;
+                        regWrite = 0;
+                    end
+                endcase
+            end
+            default: begin
+                Branch     = 0;
+                MemRead    = 0;
+                MemtoReg   = 0;
+                MemWrite   = 0;
+                ALUSrc     = 0;
+                AUIPC      = 0;
+                Jump       = 2'd0;
+                ALUOp      = 4'b0000;
+                regWrite   = 0;
+                imm        = 32'b0;
+            end
+        endcase
+    end
+            
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -122,7 +306,7 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     localparam MUL  = 3'd1;
     localparam DIV  = 3'd2;
     localparam AND = 3'd3;
-    localparam OR = 3'd4;
+    localparam AVG = 3'd4;
     localparam OUT  = 3'd5;
 
     // Todo: Wire and reg if needed
@@ -147,7 +331,7 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
                         4'b1111 : state_nxt = MUL;
                         4'b1110 : state_nxt = DIV;
                         4'b1100 : state_nxt = AND;
-                        4'b1010 : state_nxt = OR;
+                        4'b1010 : state_nxt = AVG;
                         default:state_nxt = IDLE;
                     endcase
                 end
@@ -156,7 +340,7 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
             MUL : state_nxt = (counter == 5'd31) ? OUT : MUL;
             DIV : state_nxt = (counter == 5'd31) ? OUT : DIV;
             AND : state_nxt = OUT;
-            OR  : state_nxt = OUT;
+            AVG : state_nxt = OUT;
             OUT : state_nxt = IDLE;
             default : state_nxt = IDLE;
         endcase
@@ -186,12 +370,12 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     always @(*) begin
         case (state)
             MUL: begin 
-                if (shreg[0]) alu_out = shreg[63:32] + alu_in;
-                else    alu_out = shreg[63:32];
+                if (shreg[0]) alu_out = alu_in + shreg[63:32];
+                else alu_out = shreg[63:32];
             end
             DIV: alu_out = (shreg[63:32] > alu_in) ? (shreg[63:32] - alu_in):(shreg[63:32]);
             AND: alu_out = shreg[31:0] & alu_in;
-            OR: alu_out = shreg[31:0] | alu_in;
+            AVG: alu_out = (shreg[31:0] + alu_in)>>1;
             default: alu_out = shreg[63:32];
         endcase
     end
@@ -199,16 +383,13 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     always @(*) begin
         case (state)
             MUL: begin
-                shreg_nxt[63:31] = alu_out;
-                shreg_nxt[30:0] = shreg[31:1];
+                shreg_nxt = {alu_out,shreg[31:1]};
             end
             AND:begin
-                shreg_nxt[63:33] = 0;
-                shreg_nxt[32:0] = alu_out;
+                shreg_nxt = {31'd0,alu_out};
             end
-            OR:begin
-                shreg_nxt[63:33] = 0;
-                shreg_nxt[32:0] = alu_out;
+            AVG:begin
+                shreg_nxt = {31'd0,alu_out};
             end
             DIV:begin
                 if (counter ==  5'd31) begin
@@ -265,6 +446,7 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     end
 endmodule
 
+// the ALU, use 32 bits input inA, inB, and 4 bits control signal(generate by the ALU_control).
 module ALU (inA, inB, shift_amount, alu_out, zero, control); 
 	input [31:0] inA, inB;
 	output [31:0] alu_out;
