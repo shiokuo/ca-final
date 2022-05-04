@@ -195,7 +195,7 @@ module CHIP(clk,
                                 regWrite = 1;
                             end
                             3'b100:begin //xor //TODOOOOOOOOOOOOOO
-                                ALUOp    = ;
+                                ALUOp    = 4'b0011;
                                 regWrite = 1;
                             end
                             default:begin 
@@ -482,6 +482,10 @@ module ALU (inA, inB, shift_amount, alu_out, zero, control);
             4'b0101: begin
                 alu_out <= inA >> shift_amount;
                 zero <= 1'b0;
+            end
+            //xor //TODOOOOOOOOOOOOOOOOOOOOOOOO
+            4'b0011: begin
+                alu_out <= inA ^ inB;
             end
             default:begin 
                 alu_out <= 32'b0; 
