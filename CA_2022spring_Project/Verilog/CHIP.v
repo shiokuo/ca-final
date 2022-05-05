@@ -510,7 +510,6 @@ module ALU (inA, inB, shift_amount, alu_out, zero, control);
 	output [31:0] alu_out;
 	output zero;
 
-
 	reg zero;
 	reg [31:0] alu_out;
 	always @ (*) begin
