@@ -40,6 +40,17 @@ module CHIP(clk,
     reg[2:0] Jump;
     reg[3:0] ALUOp;
     reg[31:0] imm;
+    wire [31:0] AluIna, AluInb;
+    wire [4:0] shamt;// ALU input 2 & slli/srli shift amount
+    reg [1:0] hold, hold_nxt;
+    wire [31:0] AluResult;
+    wire Zero; //ALU
+    wire valid;
+    wire [3:0] ALU_CTRL; //ALU CONTROL SIGNAL
+    wire PCSrc; //mux of pc
+    reg [31:0] Jump_dest;
+    wire [63:0] muldivout;
+    
 
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -232,6 +243,51 @@ module CHIP(clk,
             end
         endcase
     end
+    assign ALU_CTRL = (Branch)?4'b1000:((MemRead || MemWrite)? 4'b0000 : ALUOp);
+    assign PCSrc = (Branch & Zero && func3 == 3'b000)||(Branch & AluResult[31] && func3 == 3'b100);// func3 = 000 => BEQ, func3 = 100 => BLT
+    assign valid = (ALUOp == 4'b1111 && hold == 2'd0);
+    assign shamt = mem_rdata_I[24:20];
+    always@ (*) begin
+        case (Jump)
+            2'd1:begin //jal
+                Jump_dest = PC + imm;
+            end
+            2'd2: begin //jalr
+                Jump_dest = rs1_data + imm;
+            end
+            default: begin
+                Jump_dest = 32'd0;
+            end
+        endcase
+    end
+    //-------------IF----------
+    //TODO
+    //-------------EX----------
+    assign AluIna = (AUIPC)?(PC):(rs1_data);
+    assign AluInb = (ALUSrc)?(imm):(rs2_data);
+    ALU alu(
+        .inA(AluIna), 
+        .inB(AluInb), 
+        .control(ALU_ctrl)
+        .shift_amount(shamt), 
+        .alu_out(AluResult), 
+        .zero(Zero), 
+    );
+    mulDiv mudi(
+        .clk(clk),
+        .rst_n(rst_n),
+        .valid(valid),
+        .mode(ALU_CTRL), // mode: 1111: mulu, 1110: divu, 1100: and, 1010: or
+        .ready(ready),
+        .in_A(AluIna),
+        .in_B(AluInb),
+        .out(muldivout)
+    );
+    //------------MEM----------
+    //TODO
+    //-------------WB----------
+    //TODO
+
             
 
     always @(posedge clk or negedge rst_n) begin
@@ -449,12 +505,14 @@ endmodule
 // the ALU, use 32 bits input inA, inB, and 4 bits control signal(generate by the ALU_control).
 module ALU (inA, inB, shift_amount, alu_out, zero, control); 
 	input [31:0] inA, inB;
+    input [3:0] control;
+    input [4:0] shift_amount;
 	output [31:0] alu_out;
 	output zero;
+
+
 	reg zero;
 	reg [31:0] alu_out;
-	input [3:0] control;
-    input [4:0] shift_amount;
 	always @ (*) begin
         
         case (control) // instruction[30, 14-12]
